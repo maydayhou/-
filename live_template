@@ -1,0 +1,420 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# <p align = "right"> <font color="#999999"> 若对数据有疑问可咨询 @zhangxichen  </font> </p>
+
+# ## 数据载入中
+
+# In[95]:
+
+
+import sys
+from datetime import datetime, date, timedelta
+import pandas as pd
+import numpy as np
+from myutil import (execute_hive, query_hive,backcheck, define_table, add_days, today, dash_date, 
+                    connect, define_table2, title, slowfunc, aggr, lazy_query) 
+from myutil import lazy_query,query_hive, execute_hive, define_table
+import myutil
+from myutil import get_today, add_days  ## 获取当天日期
+import matplotlib.pyplot as plt
+pd.set_option('max_row',300)
+np.set_printoptions(suppress=True,   precision=10,  threshold=2000,  linewidth=150)  
+from sklearn.preprocessing import MinMaxScaler, StandardScaler, RobustScaler
+pd.set_option('display.float_format',lambda x : '%.2f' % x)
+from decimal import Decimal
+from myutil import save_df_to_hive,query_hive,get_sparksession
+
+from sklearn.cluster import KMeans
+import statsmodels.api as sm
+from statsmodels.formula.api import ols # ols 为建立线性回归模型的统计学库
+from statsmodels.stats.anova import anova_lm
+import plotly
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
+import math
+from scipy import stats
+np.set_printoptions(suppress=True,   precision=10,  threshold=2000,  linewidth=150)  
+pd.set_option('display.float_format',lambda x : '%.2f' % x)
+pd.set_option('max_columns',1000)
+rc = {'font.sans-serif': 'SimHei',
+      'axes.unicode_minus': False}
+# pd.set_option('max_row',300)
+import IPython.core.display as di;
+di.display_html('<script>jQuery(function() {if (jQuery("body.notebook_app").length == 0) { jQuery(".input_area").toggle();jQuery(".pre").toggle(); jQuery(".prompt").toggle();}});</script>', raw=True)
+import squarify
+get_ipython().run_line_magic('matplotlib', 'inline')
+get_ipython().run_line_magic('config', "InlineBackend.figure_format = 'svg'")
+import warnings
+warnings.filterwarnings('ignore')
+from IPython.display import Markdown, display
+
+def printmd(string):
+    display(Markdown(string))
+import six
+plotly.offline.init_notebook_mode() 
+
+import plotly.figure_factory as ff
+import ipywidgets as widgets
+from IPython.display import display
+
+
+# In[96]:
+
+
+class date_input():
+    def __init__(self, 
+                 dt = '2021-09-01',
+                 seller_id = "746571461", 
+                 live_date = "2021-08-25", 
+                 days = "6"
+                ):
+        self.dt = widgets.Text(description = '时间分区',value = dt)
+        self.seller_id = widgets.Text(description = '主播ID',value = seller_id)
+        self.live_date = widgets.Text(description = '大场日期',value = live_date)
+        self.days = widgets.Text(description = '对比周期',value = days)        
+
+        self.dt.on_submit(self.handle_submit)
+        self.seller_id.on_submit(self.handle_submit)
+        self.live_date.on_submit(self.handle_submit)
+        self.days.on_submit(self.handle_submit)
+
+        display(self.dt, self.seller_id, self.live_date,self.days)
+
+    def handle_submit(self, text):
+        self.v = text.value
+        return self.v
+f = date_input()
+
+
+# In[97]:
+
+
+def get_sql(dt,seller_id,live_date,days):
+xxx
+    return data
+
+
+# In[98]:
+
+
+# dt = '2021-09-01'
+# seller_id = '746571461'
+# live_date = '2021-08-25'
+# days = '6'
+d1,d2,d3,d4,d5,d6 = get_sql(f.dt.value,f.seller_id.value,f.live_date.value,f.days.value)
+
+
+# In[99]:
+
+
+d1['channel'] = '整体'
+d2_1 = d2[d2.page=='整体'][['seller_id','channel','gmv_before','gmv_after','gmv_diff','gmv_rate','seller_name']]
+d2_1.columns = ['seller_id','channel','gmv_before','gmv_after','gmv_diff','diff_rate','seller_name']
+d7_1 = pd.concat([d1[['seller_id','channel','gmv_before','gmv_after','gmv_diff','diff_rate','seller_name']],d2_1])
+
+d6_ = d6[['seller_id','gmv_before','gmv_after','order_before','order_after']].groupby('seller_id').transform('sum').drop_duplicates()
+d6_['order_diff'] = d6_['order_after'] - d6_['order_before']
+d6_['order_rate'] = d6_['order_after']/d6_['order_before']-1
+
+d6_['price_before'] = d6_['gmv_before']/d6_['order_before']
+d6_['price_after'] = d6_['gmv_after']/d6_['order_after']
+
+d6_['price_diff'] = d6_['price_after'] - d6_['price_before']
+d6_['price_rate'] = d6_['price_after']/d6_['price_before']-1
+                                           
+
+
+# In[100]:
+
+
+str0 = '''
+# <font color="#741c17"> {0} 机构化联动对比报告  </font>
+'''.format(d1['seller_name'][0])
+printmd(str0)
+
+
+# In[101]:
+
+
+str10 = '''
+### <font color="#741c17"> 主播ID: {0}  </font>
+### <font color="#741c17">大场时间: {1}  </font>
+### <font color="#741c17">对比周期: {2}天 </font>
+'''.format(f.seller_id.value,f.live_date.value,f.days.value)
+printmd(str10)
+
+
+# In[102]:
+
+
+gmv_score = d1['diff_rate'].values[0]
+show_score = d2[(d2.channel=='自然流量')&(d2.page=='整体')]['show_rate'].values[0]
+gpm_score = d2[(d2.channel=='自然流量')&(d2.page=='整体')]['gpm_rate'].values[0]
+fpm_score = d2[(d2.channel=='自然流量')&(d2.page=='整体')]['fpm_rate'].values[0]
+cost_score = d3['cost_rate'].values[0]
+roi_score = d3['roi_rate'].values[0]
+
+score = [gmv_score,show_score,gpm_score,fpm_score,cost_score,roi_score]
+
+bin1 = [-1000,0,0.25,0.5,0.75,1,1000]
+
+score_1 = pd.cut(score,bin1,labels = [0,1,2,3,4,5]).to_list()
+
+
+# In[103]:
+
+
+fig = go.Figure(data=go.Scatterpolar(
+  r=score_1,
+  theta=['GMV '+str(score_1[0])+'分','曝光量 '+str(score_1[1])+'分','GPM '+str(score_1[2])+'分','FPM '+str(score_1[3])+'分','商业化投放 '+str(score_1[4])+'分','ROI '+str(score_1[5])+'分'],
+  fill='toself',
+  fillcolor='#d8a7a0',
+  line = dict(color = '#d8a7a0')
+))
+
+fig.update_layout(
+  polar=dict(
+    radialaxis=dict(
+      visible=True
+    ),
+  ),
+  showlegend=False,
+    template="gridon",
+  title = '机构化联动能力提升雷达图',
+  height = 500,width=500
+)
+plotly.offline.iplot(fig, show_link=False)
+
+
+# In[104]:
+
+
+d1 = get_format(d1)
+d2 = get_format(d2)
+d3 = get_format(d3)
+d5 = get_format(d5)
+d6 = get_format(d6)
+d6_ = get_format(d6_)
+d7_1 = get_format(d7_1)
+
+
+# ##  <font color="#741c17"> GMV数据对比 </font> 
+
+# In[105]:
+
+
+d7_1.columns = ['主播ID','渠道','大场前日均gmv','大场后日均gmv','DIFF','涨跌幅','主播昵称']
+
+
+# In[106]:
+
+
+str1 = '''
+**从整体GMV上来看，大场后GMV的DIFF达{0}，涨跌幅达{1}；其中自然流量贡献{2}**
+'''.format(d7_1[d7_1['渠道']=='整体']['DIFF'].values[0],d7_1[d7_1['渠道']=='整体']['涨跌幅'].values[0],d7_1[d7_1['渠道']=='自然流量']['DIFF'].values[0])
+printmd(str1)
+
+
+# In[107]:
+
+
+plotly.offline.iplot(ff.create_table(d7_1[['主播ID','渠道','大场前日均gmv','大场后日均gmv','DIFF','涨跌幅']]), show_link=False)
+
+
+# ##  <font color="#741c17"> 直播能力 </font> 
+
+# In[108]:
+
+
+list_sorted = ['整体','关注页','非关注页']
+d2['page'] = d2['page'].astype('category').cat.set_categories(list_sorted)
+d2 = d2.sort_values(by=['channel','page'],ascending=False)
+d2.columns = ['主播ID','流量来源','页面','大场前日均GMV','大场后日均GMV','GMV DIFF','GMV涨跌幅','大场前日均曝光','大场后日均曝光','曝光 DIFF','曝光涨跌幅','大场前GPM','大场后GPM','GPM DIFF','GPM涨跌幅',
+              '大场前FPM','大场后FPM','FPM DIFF','FPM涨跌幅','大场前次均观流','大场后次均观流','次均观流 DIFF','次均观流涨跌幅','主播昵称']
+d2_1 = d2[['主播ID','流量来源','页面','大场前日均曝光','大场后日均曝光','曝光 DIFF','曝光涨跌幅','大场前GPM','大场后GPM','GPM DIFF','GPM涨跌幅',
+             '大场前FPM','大场后FPM','FPM DIFF','FPM涨跌幅','大场前次均观流','大场后次均观流','次均观流 DIFF','次均观流涨跌幅']].sort_values(by=['流量来源','页面'])
+
+
+# In[109]:
+
+
+str2 = '''
+**在曝光量上，自然流量的DIFF达{0}，关注页贡献{1}  
+在GPM上，自然流量的DIFF达{2}，关注页贡献{3}  
+在FPM上，自然流量的DIFF达{4}，关注页贡献{5}  
+在次均观流时长上，自然流量的DIFF达{4}，关注页贡献{5}**
+'''.format(d2_1[(d2_1['流量来源']=='自然流量')&(d2_1['页面']=='整体')]['曝光 DIFF'].values[0],
+          d2_1[(d2_1['流量来源']=='自然流量')&(d2_1['页面']=='关注页')]['曝光 DIFF'].values[0],
+          d2_1[(d2_1['流量来源']=='自然流量')&(d2_1['页面']=='整体')]['GPM DIFF'].values[0],
+          d2_1[(d2_1['流量来源']=='自然流量')&(d2_1['页面']=='关注页')]['GPM DIFF'].values[0],
+          d2_1[(d2_1['流量来源']=='自然流量')&(d2_1['页面']=='整体')]['FPM DIFF'].values[0],
+          d2_1[(d2_1['流量来源']=='自然流量')&(d2_1['页面']=='关注页')]['FPM DIFF'].values[0],
+          d2_1[(d2_1['流量来源']=='自然流量')&(d2_1['页面']=='整体')]['次均观流 DIFF'].values[0],
+          d2_1[(d2_1['流量来源']=='自然流量')&(d2_1['页面']=='关注页')]['次均观流 DIFF'].values[0])
+printmd(str2)
+
+
+# In[110]:
+
+
+plotly.offline.iplot(ff.create_table(d2_1[['主播ID','流量来源','页面','大场前日均曝光','大场后日均曝光','曝光 DIFF','曝光涨跌幅']]), show_link=False)
+
+
+# In[111]:
+
+
+plotly.offline.iplot(ff.create_table(d2_1[['主播ID','流量来源','页面','大场前GPM','大场后GPM','GPM DIFF','GPM涨跌幅']]), show_link=False)
+
+
+# In[112]:
+
+
+plotly.offline.iplot(ff.create_table(d2_1[['主播ID','流量来源','页面','大场前FPM','大场后FPM','FPM DIFF','FPM涨跌幅']]), show_link=False)
+
+
+# In[113]:
+
+
+plotly.offline.iplot(ff.create_table(d2_1[['主播ID','流量来源','页面','大场前次均观流','大场后次均观流','次均观流 DIFF','次均观流涨跌幅']]), show_link=False)
+
+
+# ## <font color="#741c17"> 商业化投放 </font> 
+
+# In[114]:
+
+
+d3.columns = ['主播ID','大场前日均投放','大场后日均投放','投放DIFF','投放涨跌幅','大场前ROI','大场后ROI','ROI DIFF','ROI涨跌幅','主播昵称']
+
+
+# In[115]:
+
+
+str3 = '''
+**大场后日均投放的DIFF达{0}，涨跌幅达{1}  
+大场后ROI的DIFF达{2}，涨跌幅达{3}**
+'''.format(d3['投放DIFF'].values[0],d3['投放涨跌幅'].values[0],d3['ROI DIFF'].values[0],d3['ROI涨跌幅'].values[0])
+printmd(str3)
+
+
+# In[116]:
+
+
+plotly.offline.iplot(ff.create_table(d3[['主播ID','大场前日均投放','大场后日均投放','投放DIFF','投放涨跌幅','大场前ROI','大场后ROI','ROI DIFF','ROI涨跌幅']]), show_link=False)
+
+
+# ##  <font color="#741c17"> 粉丝价值 </font> 
+
+# In[117]:
+
+
+fig = go.Figure(data=go.Scatter(
+    x=d4['days'], 
+    y=d4['delta'],
+    text=d4['delta'],
+    textposition='top right',
+    mode='lines+markers+text',
+    line=dict(color='#5372ab', width=3)))
+
+fig.update_layout( template="simple_white",
+                 title={'text': "大场前后涨粉情况"},height=500,width=900)
+plotly.offline.iplot(fig, show_link=False)
+
+
+# In[118]:
+
+
+d5.columns = ['主播ID','类型','大场前日GMV','大场后GMV','GMV DIFF','GMV涨跌幅','大场前买家数','大场后买家数','买家数DIFF','买家数涨跌幅','大场前ARPU','大场后ARPU','ARPU DIFF','ARPU涨跌幅','主播昵称']
+plotly.offline.iplot(ff.create_table(d5[['主播ID','类型','大场前日GMV','大场后GMV','GMV DIFF','GMV涨跌幅']]), show_link=False)
+
+
+# In[119]:
+
+
+plotly.offline.iplot(ff.create_table(d5[['主播ID','类型','大场前买家数','大场后买家数','买家数DIFF','买家数涨跌幅','大场前ARPU','大场后ARPU','ARPU DIFF','ARPU涨跌幅']]), show_link=False)
+
+
+# ##  <font color="#741c17"> 货品结构 </font> 
+
+# In[120]:
+
+
+d6_.columns = ['大场前GMV','大场后GMV','大场前订单','大场后订单','订单DIFF','订单涨跌幅','大场前单均价','大场后单均价','单均价DIFF','单均价涨跌幅']
+
+
+# In[121]:
+
+
+str6 = '''
+**大场后订单的DIFF达{0}，涨跌幅达{1}  
+单均价的DIFF达{2}，涨跌幅达{3}**
+'''.format(d6_['订单DIFF'].values[0],d6_['订单涨跌幅'].values[0],d6_['单均价DIFF'].values[0],d6_['单均价涨跌幅'].values[0])
+printmd(str6)
+
+
+# In[122]:
+
+
+plotly.offline.iplot(ff.create_table(d6_),show_link =False)
+
+
+# In[123]:
+
+
+d6.columns = ['主播ID','类目','大场前GMV','大场后GMV','大场前订单','大场后订单','大场前单均价','大场后单均价','大场前GMV占比','大场后GMV占比','主播昵称']
+
+
+# In[124]:
+
+
+from plotly.subplots import make_subplots
+
+fig = make_subplots(rows=2, cols=1, specs=[[{"type": "treemap"}], [{"type": "treemap"}]],vertical_spacing=0.02)
+
+fig.add_trace(
+    go.Treemap(
+    labels =  d6['类目'],
+    parents=[""]*len(d6['类目']),
+    values =  d6['大场前GMV占比'],#labelsの要素に対応する値をいれる
+    textinfo = "label+value",
+    marker_colorscale = 'RdBu'
+    ),
+    row=1, col=1
+)
+
+fig.add_trace(
+    go.Treemap(
+    labels =  d6['类目'],
+    parents=[""]*len(d6['类目']),
+    values =  d6['大场后GMV占比'],#labelsの要素に対応する値をいれる
+    textinfo = "label+value",
+    marker_colorscale = 'RdBu'
+    ),
+    row=2, col=1
+)
+
+fig.update_layout(height=1000, width=1000, title_text="大场前 vs 大场后",margin = dict(t=30))
+
+fig.show()
+
+
+# In[125]:
+
+
+plotly.offline.iplot(ff.create_table(d6[d6['大场后GMV占比']>=0.1][['主播ID','类目','大场前GMV','大场后GMV','大场前订单','大场后订单','大场前单均价','大场后单均价','大场前GMV占比','大场后GMV占比']]), show_link=False)
+
+
+# In[126]:
+
+
+# %%bash
+# jupyter nbconvert --to html template_1.ipynb
+# mv template_1.html $(date +"%m_%d_%Y-%H%M%S")_template_1.html
+
+
+# In[ ]:
+
+
+
+
